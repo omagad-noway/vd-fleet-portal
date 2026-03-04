@@ -45,14 +45,27 @@ function checkKey() {
 function enterDashboard() {
     document.getElementById('auth-screen').classList.add('hidden');
     document.getElementById('dashboard').classList.remove('hidden');
+    
     const currentMonthName = new Date().toLocaleString('en-US', { month: 'long' });
     const monthSelect = document.getElementById('month-select');
     if (monthSelect) monthSelect.value = currentMonthName;
+    
+    // Initial Load
     loadData();
+
+    // AUTO-REFRESH LOGIC: Updates every 5 seconds (5000ms)
+    // This allows data entered elsewhere to appear automatically
+    setInterval(() => {
+        // We only reload if we aren't currently editing a modal to prevent loss of focus
+        if (document.getElementById('edit-modal').classList.contains('hidden')) {
+            loadData();
+        }
+    }, 5000);
 }
 
 async function loadData() {
     try {
+        // Added cache-busting timestamp to ensure fresh data from database
         const response = await fetch(`${SCRIPT_URL}?t=${Date.now()}`); 
         const data = await response.json();
         currentData = (userRole === 'driver') ? data.filter(item => String(item["TRUCK"]) === assignedTruck) : data;
@@ -94,6 +107,7 @@ function requestEditAccess() {
     if (editModeActive) {
         editModeActive = false;
         document.getElementById('management-tools').classList.add('hidden');
+        document.getElementById('actions-header').classList.add('hidden');
         document.getElementById('mode-toggle').innerText = "🔒 ENTER EDIT MODE";
         document.getElementById('mode-toggle').classList.replace('bg-red-600', 'bg-slate-800');
         renderDashboard(filteredData);
@@ -107,6 +121,8 @@ function verifyMasterCode() {
     if (document.getElementById('master-pass-input').value === MASTER_KEY) {
         editModeActive = true;
         document.getElementById('management-tools').classList.remove('hidden');
+        document.getElementById('actions-header').classList.remove('hidden'); // Fix: Show header
+        document.getElementById('actions-header').classList.remove('hidden');
         document.getElementById('mode-toggle').innerText = "🔓 LOCK VIEW MODE";
         document.getElementById('mode-toggle').classList.replace('bg-slate-800', 'bg-red-600');
         closeMasterModal();
@@ -140,9 +156,15 @@ function renderDashboard(data) {
     const tbody = document.getElementById('ledger-body');
     const truckContainer = document.getElementById('truck-stats');
     const yearlyBar = document.getElementById('yearly-summary');
+    const actionHeader = document.getElementById('actions-header');
+
     if (!tbody) return;
     tbody.innerHTML = '';
     
+    // Toggle header visibility based on edit mode
+    if(editModeActive) actionHeader.classList.remove('hidden');
+    else actionHeader.classList.add('hidden');
+
     let tG = 0, tM = 0, tLM = 0, truckMap = {};
     let yG = 0, yM = 0;
 
@@ -167,23 +189,18 @@ function renderDashboard(data) {
         const rptmNum = totalMiles > 0 ? (gross / totalMiles) : 0;
         const rpmNum = loaded > 0 ? (gross / loaded) : 0;
 
-        tG += gross;
-        tM += totalMiles;
-        tLM += loaded;
+        tG += gross; tM += totalMiles; tLM += loaded;
 
         let typeColor = "bg-blue-100 text-blue-700"; 
         if (item.TYPE === 'PARTIAL') typeColor = "bg-green-100 text-green-700";
         else if (item.TYPE === 'TONU') typeColor = "bg-orange-100 text-orange-700";
         
-        let rptmDisplay = rptmNum.toFixed(2);
-        let rptmClass = rptmNum >= 3.0 ? 'bg-green-500 text-white' : (rptmNum > 2.0 ? 'bg-yellow-200 text-gray-800' : 'bg-red-100 text-red-700');
-        let rpmDisplay = rpmNum.toFixed(2);
-        let rpmClass = "bg-blue-50 text-blue-700";
+        // Render actions column only if edit mode is active
+        let actionsTd = editModeActive ? `<td class="p-4 flex gap-2 justify-center">
+            <button onclick="openEditModal(${index})" class="hover:scale-125 transition-all text-lg mx-2">✏️</button>
+            <button onclick="deleteRecord(${index})" class="hover:scale-125 transition-all text-lg">🗑️</button>
+        </td>` : '';
 
-        if (totalMiles === 0) { rptmDisplay = "-"; rptmClass = "bg-gray-100 text-gray-400"; }
-        if (loaded === 0) { rpmDisplay = "-"; rpmClass = "bg-gray-100 text-gray-400"; }
-
-        // MAIN TABLE RENDERING (ACTIONS COLUMN REMOVED)
         tbody.innerHTML += `<tr class="border-b bg-white text-black font-medium text-xs">
             <td class="p-4 text-xs">${new Date(item.DATE).toLocaleDateString('en-US', {timeZone: 'UTC'})}</td>
             <td class="p-4 font-bold text-blue-700">#${item.TRUCK}</td>
@@ -192,8 +209,10 @@ function renderDashboard(data) {
             <td class="p-4 text-right">${empty}</td>
             <td class="p-4 text-right">${loaded}</td>
             <td class="p-4 text-right font-black">$${gross.toLocaleString()}</td>
-            <td class="p-4 text-right font-black ${rpmClass}">${rpmDisplay}</td>
-            <td class="p-4 text-right font-black ${rptmClass}">${rptmDisplay}</td></tr>`;
+            <td class="p-4 text-right font-black text-blue-700 bg-blue-50">${rpmNum.toFixed(2)}</td>
+            <td class="p-4 text-right font-black ${rptmNum >= 3 ? 'bg-green-500 text-white' : 'bg-red-100 text-red-700'}">${rptmNum.toFixed(2)}</td>
+            ${actionsTd}
+        </tr>`;
 
         if(!truckMap[item.TRUCK]) truckMap[item.TRUCK] = { weeks: {} };
         const weekIndex = Math.ceil(new Date(item.DATE).getUTCDate() / 7); 
@@ -210,7 +229,7 @@ function renderDashboard(data) {
             return { id, weeks: truckMap[id].weeks, avgRptm: tm > 0 ? tg/tm : 0, totalGross: tg };
         }).sort((a, b) => b.avgRptm - a.avgRptm);
 
-        sortedTrucks.forEach((truck, idx) => {
+        sortedTrucks.forEach((truck) => {
             let weeklyHtml = '';
             for(let i=1; i<=5; i++) {
                 if(truck.weeks[i]) {
@@ -218,20 +237,17 @@ function renderDashboard(data) {
                     const wRptm = wData.totalMiles > 0 ? (wData.gross / wData.totalMiles).toFixed(2) : "-";
                     const wRpm = wData.loadedMiles > 0 ? (wData.gross / wData.loadedMiles).toFixed(2) : "-";
                     
-                    // PERFORMANCE GRID: 45px 55px 60px 50px | Font: 11.5px
                     weeklyHtml += `
                         <div class="grid grid-cols-[45px_55px_60px_50px] items-center text-[11.5px] py-1 border-t border-gray-100 whitespace-nowrap overflow-hidden">
                             <span class="font-bold text-gray-400 uppercase text-[9px]">Week ${i}</span>
                             <span class="text-blue-900 font-bold">$${wData.gross.toLocaleString()}</span>
-                            
                             <div class="flex gap-1 items-center">
                                 <span class="text-gray-400 text-[10px] uppercase font-bold">RPM:</span>
-                                <span class="${wRpm === '-' ? 'text-gray-300' : 'font-black text-slate-950'}">${wRpm}</span>
+                                <span class="font-black text-slate-950">${wRpm}</span>
                             </div>
-                            
                             <div class="flex gap-1 items-center">
                                 <span class="text-gray-400 text-[10px] uppercase font-bold">RPTM:</span>
-                                <span class="${wRptm === '-' ? 'text-gray-300' : 'font-black text-slate-950'}">${wRptm}</span>
+                                <span class="font-black text-slate-950">${wRptm}</span>
                             </div>
                         </div>`;
                 }
@@ -239,7 +255,7 @@ function renderDashboard(data) {
             truckContainer.innerHTML += `
                 <div class="bg-white rounded-lg px-2.5 py-3 mb-3 border border-gray-200 shadow-sm relative overflow-hidden">
                     <div class="absolute left-0 top-0 bottom-0 w-1 ${truck.avgRptm >= 3 ? 'bg-green-500' : 'bg-yellow-400'}"></div>
-                    <p class="text-[13px] font-black uppercase mb-1.5 flex items-center tracking-tight">UNIT #${truck.id} ${idx === 0 ? '🏆' : ''}</p>
+                    <p class="text-[13px] font-black uppercase mb-1.5 flex items-center tracking-tight">UNIT #${truck.id}</p>
                     <div class="flex flex-col">${weeklyHtml}</div>
                     <div class="mt-2 pt-1 border-t border-dashed border-gray-200 flex justify-between items-center px-0.5">
                          <span class="text-[12px] font-black uppercase text-blue-700 tracking-tighter">Monthly Total</span>
@@ -255,7 +271,7 @@ function renderDashboard(data) {
     document.getElementById('load-count').innerText = data.length;
 }
 
-// 8. UTILS & EVENT HANDLERS
+// 8. DATA HANDLERS
 function exportToCSV() {
     let rows = document.querySelectorAll("table tr");
     let csv = Array.from(rows).map(row => Array.from(row.querySelectorAll("th, td")).map(td => `"${td.innerText.replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -264,6 +280,12 @@ function exportToCSV() {
     link.href = URL.createObjectURL(blob);
     link.download = `Fleet_Log_${new Date().toLocaleDateString()}.csv`;
     link.click();
+}
+
+function filterTable() {
+    const filter = document.getElementById("table-search").value.toLowerCase();
+    const rows = document.getElementById("ledger-body").getElementsByTagName("tr");
+    for (let i = 0; i < rows.length; i++) rows[i].style.display = rows[i].textContent.toLowerCase().includes(filter) ? "" : "none";
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -346,9 +368,3 @@ async function saveEdit(e, originalItem) {
 }
 
 function closeEditModal() { document.getElementById('edit-modal').classList.add('hidden'); }
-
-function filterTable() {
-    const filter = document.getElementById("table-search").value.toLowerCase();
-    const rows = document.getElementById("ledger-body").getElementsByTagName("tr");
-    for (let i = 0; i < rows.length; i++) rows[i].style.display = rows[i].textContent.toLowerCase().includes(filter) ? "" : "none";
-}
