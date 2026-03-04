@@ -60,7 +60,7 @@ function enterDashboard() {
         if (document.getElementById('edit-modal').classList.contains('hidden')) {
             loadData();
         }
-    }, 5000);
+    }, 3000);
 }
 
 async function loadData() {
