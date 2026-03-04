@@ -87,7 +87,6 @@
                                 <option value="FULL">FULL</option>
                                 <option value="PARTIAL">PARTIAL</option>
                                 <option value="TONU">TONU</option> </select>
-                            </select>
                             <button type="submit" class="bg-blue-700 text-white rounded font-bold uppercase text-[10px]">SAVE LOAD</button>
                         </form>
                     </div>
@@ -100,7 +99,7 @@
                     <div class="p-3 bg-gray-50 border-b flex justify-between items-center">
                         <div class="flex items-center gap-2">
                             <span class="text-[10px] font-bold text-gray-400 uppercase">View:</span>
-                            <select id="month-select" class="text-[11px] font-bold border rounded px-2 py-1 bg-white outline-none text-blue-900">
+                            <select id="month-select" onchange="applyFilters()" class="text-[11px] font-bold border rounded px-2 py-1 bg-white outline-none text-blue-900">
                                 <option value="ALL">All Months</option>
                                 <option value="January">January</option>
                                 <option value="February">February</option>
@@ -115,7 +114,7 @@
                                 <option value="November">November</option>
                                 <option value="December">December</option>
                             </select>
-                            <select id="year-select" class="text-[11px] font-bold border rounded px-2 py-1 bg-white outline-none text-blue-900">
+                            <select id="year-select" onchange="applyFilters()" class="text-[11px] font-bold border rounded px-2 py-1 bg-white outline-none text-blue-900">
                                 </select>
                             <button onclick="applyFilters()" class="bg-blue-600 text-white px-3 py-1 rounded text-[10px] font-bold uppercase hover:bg-blue-700 transition-all shadow-sm">Filter</button>
                         </div>
@@ -136,7 +135,8 @@
                                     <th class="p-4 text-right">Loaded</th>
                                     <th class="p-4 text-right cursor-pointer" onclick="sortTable('GROSS')">Gross<span id="sort-gross"></span></th>
                                     <th class="p-4 text-right cursor-pointer" onclick="sortTable('RPM')">RPM<span id="sort-rpm"></span></th>     
-                                    <th class="p-4 text-right cursor-pointer" onclick="sortTable('RPM')">RPTM<span id="sort-rptm"></span></th>                               
+                                    <th class="p-4 text-right cursor-pointer" onclick="sortTable('RPM')">RPTM<span id="sort-rptm"></span></th>                                
+                                    <th id="actions-header" class="hidden p-4 text-center">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="ledger-body" class="text-sm"></tbody>
@@ -224,7 +224,7 @@
                 <select id="edit-type" class="w-full border p-2 rounded text-sm bg-white font-bold" required>
                     <option value="FULL">FULL</option>
                     <option value="PARTIAL">PARTIAL</option>
-                    <option value="TONU">TONU</option> </select>
+                    <option value="TONU">TONU</option>
                 </select>
                 <input type="number" step="0.01" id="edit-gross" placeholder="Gross Income" class="w-full border p-2 rounded text-sm" required>
                 <div class="flex justify-center gap-4 pt-6">
