@@ -1,0 +1,68 @@
+/* VD Freight LLC - Dashboard Styles */
+
+:root {
+    --bg-low: #f8d7da;     /* Reddish for RPM < 2.50 */
+    --bg-mid: #F5F75E;     /* Yellowish for RPM 2.50 - 2.99 */
+    --bg-high: #93FA66;    /* Your Custom Lime Green for RPM 3.00+ */
+    --vdf-blue: #1e40af;   /* Header Blue */
+    --text-main: #000000;  /* Pure Black for text */
+}
+
+/* 1. Global Text Rules - Forces everything to Black */
+body, table, th, td, p, span, input, label {
+    color: var(--text-main) !important;
+}
+
+/* 2. Table Layout & Headers */
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+thead th {
+    background-color: #f3f4f6;
+    color: var(--text-main) !important;
+    text-transform: uppercase;
+    font-weight: 900;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+/* 3. Traffic Light Logic (Targeted at RPM column) */
+.bg-low { 
+    background-color: var(--bg-low) !important; 
+    font-weight: bold;
+}
+
+.bg-mid { 
+    background-color: var(--bg-mid) !important; 
+    font-weight: bold;
+}
+
+.bg-high { 
+    background-color: var(--bg-high) !important; 
+    color: var(--text-main) !important; /* Black text on Lime Green for readability */
+    font-weight: 900 !important;
+}
+
+/* 4. Weekly Section Headers */
+.week-header {
+    background-color: var(--vdf-blue) !important;
+}
+
+.week-header td {
+    color: #ffffff !important; /* Keep week text white for visibility */
+    font-weight: bold;
+    text-align: center;
+    text-transform: uppercase;
+    font-size: 12px;
+    padding: 10px !important;
+    letter-spacing: 0.2em;
+}
+
+/* 5. Sidebar Truck Performance Cards */
+.truck-card {
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
+    border-left-width: 8px; /* Performance indicator bar
