@@ -45,14 +45,10 @@ function checkKey() {
 function enterDashboard() {
     document.getElementById('auth-screen').classList.add('hidden');
     document.getElementById('dashboard').classList.remove('hidden');
-    
     const currentMonthName = new Date().toLocaleString('en-US', { month: 'long' });
     const monthSelect = document.getElementById('month-select');
     if (monthSelect) monthSelect.value = currentMonthName;
-    
     loadData();
-
-    // AUTO-REFRESH LOGIC: Updates every 3 seconds
     setInterval(() => {
         if (document.getElementById('edit-modal').classList.contains('hidden')) {
             loadData();
@@ -70,7 +66,6 @@ async function loadData() {
     } catch (err) { console.error("Sync Error:", err); }
 }
 
-// 5. DUAL FILTER LOGIC
 function populateYearFilter() {
     const yearSelect = document.getElementById('year-select');
     if (!yearSelect) return;
@@ -98,7 +93,7 @@ function applyFilters() {
     applySort();
 }
 
-// 6. MASTER ACCESS
+// 5. MASTER ACCESS
 function requestEditAccess() {
     if (editModeActive) {
         editModeActive = false;
@@ -126,7 +121,7 @@ function verifyMasterCode() {
 }
 function closeMasterModal() { document.getElementById('master-modal').classList.add('hidden'); }
 
-// 7. SORTING & RENDER
+// 6. SORTING & RENDER
 function sortTable(column) {
     if (sortState.column === column) {
         sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
@@ -216,12 +211,29 @@ function renderDashboard(data) {
 
     if (truckContainer) {
         truckContainer.innerHTML = '';
-        let sortedTrucks = Object.keys(truckMap).map(id => {
-            let tg = 0, tm = 0; Object.values(truckMap[id].weeks).forEach(w => { tg += w.gross; tm += w.totalMiles; });
+        
+        let truckList = Object.keys(truckMap).map(id => {
+            let tg = 0, tm = 0; 
+            Object.values(truckMap[id].weeks).forEach(w => { tg += w.gross; tm += w.totalMiles; });
             return { id, weeks: truckMap[id].weeks, avgRptm: tm > 0 ? tg/tm : 0, totalGross: tg };
-        }).sort((a, b) => b.avgRptm - a.avgRptm);
+        });
 
-        sortedTrucks.forEach((truck, idx) => {
+        // 1. Identify Silver Winner (Highest Gross)
+        const silverWinner = [...truckList].sort((a, b) => b.totalGross - a.totalGross)[0];
+        const highestGrossId = silverWinner?.id;
+
+        // 2. Initial Sort by Performance (Gold Winner)
+        truckList.sort((a, b) => b.avgRptm - a.avgRptm);
+
+        // 3. FORCE POSITIONING: Move Silver Winner to 2nd place (Index 1)
+        if (truckList.length > 1 && silverWinner) {
+            // Remove the silver winner from its performance-based spot
+            truckList = truckList.filter(t => t.id !== highestGrossId);
+            // Re-insert at index 1 (second position)
+            truckList.splice(1, 0, silverWinner);
+        }
+
+        truckList.forEach((truck, idx) => {
             let weeklyHtml = '';
             for(let i=1; i<=5; i++) {
                 if(truck.weeks[i]) {
@@ -244,12 +256,18 @@ function renderDashboard(data) {
                         </div>`;
                 }
             }
-            // ADDED idx === 0 check for TROPHY 🏆
+
+            let trophy = '';
+            // Gold trophy remains for the highest performance (regardless of forced position)
+            // But usually, idx 0 will be the performance leader.
+            if (idx === 0) trophy += '<span class="ml-1" title="Best Performance">🏆</span>';
+            if (truck.id === highestGrossId) trophy += '<span class="ml-1" title="Highest Revenue">🥈</span>';
+
             truckContainer.innerHTML += `
                 <div class="bg-white rounded-lg px-2.5 py-3 mb-3 border border-gray-200 shadow-sm relative overflow-hidden">
                     <div class="absolute left-0 top-0 bottom-0 w-1 ${truck.avgRptm >= 3 ? 'bg-green-500' : 'bg-yellow-400'}"></div>
                     <p class="text-[13px] font-black uppercase mb-1.5 flex items-center tracking-tight">
-                        UNIT #${truck.id} ${idx === 0 ? '<span class="ml-1">🏆</span>' : ''}
+                        UNIT #${truck.id} ${trophy}
                     </p>
                     <div class="flex flex-col">${weeklyHtml}</div>
                     <div class="mt-2 pt-1 border-t border-dashed border-gray-200 flex justify-between items-center px-0.5">
@@ -266,7 +284,7 @@ function renderDashboard(data) {
     document.getElementById('load-count').innerText = data.length;
 }
 
-// 8. DATA HANDLERS & UTILS
+// 7. DATA HANDLERS & UTILS
 function exportToCSV() {
     let rows = document.querySelectorAll("table tr");
     let csv = Array.from(rows).map(row => Array.from(row.querySelectorAll("th, td")).map(td => `"${td.innerText.replace(/"/g, '""')}"`).join(",")).join("\n");
