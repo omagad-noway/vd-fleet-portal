@@ -218,19 +218,27 @@ function renderDashboard(data) {
             return { id, weeks: truckMap[id].weeks, avgRptm: tm > 0 ? tg/tm : 0, totalGross: tg };
         });
 
-        // 1. Identify Silver Winner (Highest Gross)
-        const silverWinner = [...truckList].sort((a, b) => b.totalGross - a.totalGross)[0];
-        const highestGrossId = silverWinner?.id;
+        // 1. Identify the absolute winners
+        const bestPerformanceTruck = [...truckList].sort((a, b) => b.avgRptm - a.avgRptm)[0];
+        const highestGrossTruck = [...truckList].sort((a, b) => b.totalGross - a.totalGross)[0];
 
-        // 2. Initial Sort by Performance (Gold Winner)
+        const goldId = bestPerformanceTruck?.id;
+        const silverId = highestGrossTruck?.id;
+
+        // 2. Sort the list by Performance for general order
         truckList.sort((a, b) => b.avgRptm - a.avgRptm);
 
-        // 3. FORCE POSITIONING: Move Silver Winner to 2nd place (Index 1)
-        if (truckList.length > 1 && silverWinner) {
-            // Remove the silver winner from its performance-based spot
-            truckList = truckList.filter(t => t.id !== highestGrossId);
-            // Re-insert at index 1 (second position)
-            truckList.splice(1, 0, silverWinner);
+        // 3. FORCE POSITIONING
+        // If same truck wins both: It stays in 1st place.
+        // If different trucks: Gold winner is 1st, Silver winner is 2nd.
+        if (truckList.length > 1) {
+            if (goldId === silverId) {
+                // Already in 1st due to performance sort, no change needed.
+            } else {
+                // Remove silver winner from wherever it is and place it at index 1
+                truckList = truckList.filter(t => t.id !== silverId);
+                truckList.splice(1, 0, highestGrossTruck);
+            }
         }
 
         truckList.forEach((truck, idx) => {
@@ -257,11 +265,10 @@ function renderDashboard(data) {
                 }
             }
 
+            // Assign trophies (Truck can have both)
             let trophy = '';
-            // Gold trophy remains for the highest performance (regardless of forced position)
-            // But usually, idx 0 will be the performance leader.
-            if (idx === 0) trophy += '<span class="ml-1" title="Best Performance">🏆</span>';
-            if (truck.id === highestGrossId) trophy += '<span class="ml-1" title="Highest Revenue">🥈</span>';
+            if (truck.id === goldId) trophy += '<span class="ml-1" title="Best Performance">🏆</span>';
+            if (truck.id === silverId) trophy += '<span class="ml-1" title="Highest Revenue">🥈</span>';
 
             truckContainer.innerHTML += `
                 <div class="bg-white rounded-lg px-2.5 py-3 mb-3 border border-gray-200 shadow-sm relative overflow-hidden">
