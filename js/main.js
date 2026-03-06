@@ -50,13 +50,10 @@ function enterDashboard() {
     const monthSelect = document.getElementById('month-select');
     if (monthSelect) monthSelect.value = currentMonthName;
     
-    // Initial Load
     loadData();
 
-    // AUTO-REFRESH LOGIC: Updates every 5 seconds (5000ms)
-    // This allows data entered elsewhere to appear automatically
+    // AUTO-REFRESH LOGIC: Updates every 3 seconds
     setInterval(() => {
-        // We only reload if we aren't currently editing a modal to prevent loss of focus
         if (document.getElementById('edit-modal').classList.contains('hidden')) {
             loadData();
         }
@@ -65,7 +62,6 @@ function enterDashboard() {
 
 async function loadData() {
     try {
-        // Added cache-busting timestamp to ensure fresh data from database
         const response = await fetch(`${SCRIPT_URL}?t=${Date.now()}`); 
         const data = await response.json();
         currentData = (userRole === 'driver') ? data.filter(item => String(item["TRUCK"]) === assignedTruck) : data;
@@ -121,7 +117,6 @@ function verifyMasterCode() {
     if (document.getElementById('master-pass-input').value === MASTER_KEY) {
         editModeActive = true;
         document.getElementById('management-tools').classList.remove('hidden');
-        document.getElementById('actions-header').classList.remove('hidden'); // Fix: Show header
         document.getElementById('actions-header').classList.remove('hidden');
         document.getElementById('mode-toggle').innerText = "🔓 LOCK VIEW MODE";
         document.getElementById('mode-toggle').classList.replace('bg-slate-800', 'bg-red-600');
@@ -161,7 +156,6 @@ function renderDashboard(data) {
     if (!tbody) return;
     tbody.innerHTML = '';
     
-    // Toggle header visibility based on edit mode
     if(editModeActive) actionHeader.classList.remove('hidden');
     else actionHeader.classList.add('hidden');
 
@@ -185,7 +179,6 @@ function renderDashboard(data) {
         const empty = Number(item["DEADHEAD"]) || 0;
         const totalMiles = loaded + empty;
         const gross = Number(item["GROSS"]) || 0;
-        
         const rptmNum = totalMiles > 0 ? (gross / totalMiles) : 0;
         const rpmNum = loaded > 0 ? (gross / loaded) : 0;
 
@@ -195,7 +188,6 @@ function renderDashboard(data) {
         if (item.TYPE === 'PARTIAL') typeColor = "bg-green-100 text-green-700";
         else if (item.TYPE === 'TONU') typeColor = "bg-orange-100 text-orange-700";
         
-        // Render actions column only if edit mode is active
         let actionsTd = editModeActive ? `<td class="p-4 flex gap-2 justify-center">
             <button onclick="openEditModal(${index})" class="hover:scale-125 transition-all text-lg mx-2">✏️</button>
             <button onclick="deleteRecord(${index})" class="hover:scale-125 transition-all text-lg">🗑️</button>
@@ -229,7 +221,7 @@ function renderDashboard(data) {
             return { id, weeks: truckMap[id].weeks, avgRptm: tm > 0 ? tg/tm : 0, totalGross: tg };
         }).sort((a, b) => b.avgRptm - a.avgRptm);
 
-        sortedTrucks.forEach((truck) => {
+        sortedTrucks.forEach((truck, idx) => {
             let weeklyHtml = '';
             for(let i=1; i<=5; i++) {
                 if(truck.weeks[i]) {
@@ -252,10 +244,13 @@ function renderDashboard(data) {
                         </div>`;
                 }
             }
+            // ADDED idx === 0 check for TROPHY 🏆
             truckContainer.innerHTML += `
                 <div class="bg-white rounded-lg px-2.5 py-3 mb-3 border border-gray-200 shadow-sm relative overflow-hidden">
                     <div class="absolute left-0 top-0 bottom-0 w-1 ${truck.avgRptm >= 3 ? 'bg-green-500' : 'bg-yellow-400'}"></div>
-                    <p class="text-[13px] font-black uppercase mb-1.5 flex items-center tracking-tight">UNIT #${truck.id}</p>
+                    <p class="text-[13px] font-black uppercase mb-1.5 flex items-center tracking-tight">
+                        UNIT #${truck.id} ${idx === 0 ? '<span class="ml-1">🏆</span>' : ''}
+                    </p>
                     <div class="flex flex-col">${weeklyHtml}</div>
                     <div class="mt-2 pt-1 border-t border-dashed border-gray-200 flex justify-between items-center px-0.5">
                          <span class="text-[12px] font-black uppercase text-blue-700 tracking-tighter">Monthly Total</span>
@@ -271,7 +266,7 @@ function renderDashboard(data) {
     document.getElementById('load-count').innerText = data.length;
 }
 
-// 8. DATA HANDLERS
+// 8. DATA HANDLERS & UTILS
 function exportToCSV() {
     let rows = document.querySelectorAll("table tr");
     let csv = Array.from(rows).map(row => Array.from(row.querySelectorAll("th, td")).map(td => `"${td.innerText.replace(/"/g, '""')}"`).join(",")).join("\n");
