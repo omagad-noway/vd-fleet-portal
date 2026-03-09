@@ -49,6 +49,7 @@ function enterDashboard() {
     const monthSelect = document.getElementById('month-select');
     if (monthSelect) monthSelect.value = currentMonthName;
     loadData();
+    
     setInterval(() => {
         if (document.getElementById('edit-modal').classList.contains('hidden')) {
             loadData();
@@ -93,7 +94,6 @@ function applyFilters() {
     applySort();
 }
 
-// 5. MASTER ACCESS
 function requestEditAccess() {
     if (editModeActive) {
         editModeActive = false;
@@ -112,7 +112,7 @@ function verifyMasterCode() {
     if (document.getElementById('master-pass-input').value === MASTER_KEY) {
         editModeActive = true;
         document.getElementById('management-tools').classList.remove('hidden');
-        document.getElementById('actions-header').classList.remove('hidden');
+        document.getElementById('actions-header').classList.remove('hidden'); 
         document.getElementById('mode-toggle').innerText = "🔓 LOCK VIEW MODE";
         document.getElementById('mode-toggle').classList.replace('bg-slate-800', 'bg-red-600');
         closeMasterModal();
@@ -121,7 +121,6 @@ function verifyMasterCode() {
 }
 function closeMasterModal() { document.getElementById('master-modal').classList.add('hidden'); }
 
-// 6. SORTING & RENDER
 function sortTable(column) {
     if (sortState.column === column) {
         sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
@@ -145,7 +144,6 @@ function applySort() {
 function renderDashboard(data) {
     const tbody = document.getElementById('ledger-body');
     const truckContainer = document.getElementById('truck-stats');
-    const yearlyBar = document.getElementById('yearly-summary');
     const actionHeader = document.getElementById('actions-header');
 
     if (!tbody) return;
@@ -155,27 +153,17 @@ function renderDashboard(data) {
     else actionHeader.classList.add('hidden');
 
     let tG = 0, tM = 0, tLM = 0, truckMap = {};
-    let yG = 0, yM = 0;
-
-    if (userRole === 'admin' && yearlyBar) {
-        yearlyBar.classList.remove('hidden');
-        currentData.forEach(item => {
-            const miles = (Number(item.DEADHEAD) || 0) + (Number(item.LOADEDMILES) || 0);
-            yG += Number(item.GROSS) || 0;
-            yM += miles;
-        });
-        document.getElementById('ytd-gross').innerText = `$${yG.toLocaleString()}`;
-        document.getElementById('ytd-loads').innerText = currentData.length;
-        document.getElementById('ytd-rpm').innerText = yM > 0 ? (yG / yM).toFixed(2) : "0.00";
-    }
 
     data.forEach((item, index) => {
         const loaded = Number(item["LOADEDMILES"]) || 0;
         const empty = Number(item["DEADHEAD"]) || 0;
         const totalMiles = loaded + empty;
         const gross = Number(item["GROSS"]) || 0;
-        const rptmNum = totalMiles > 0 ? (gross / totalMiles) : 0;
-        const rpmNum = loaded > 0 ? (gross / loaded) : 0;
+        
+        const rawRptm = totalMiles > 0 ? (gross / totalMiles) : 0;
+        const rptmNum = parseFloat(rawRptm.toFixed(2));
+        const rawRpm = loaded > 0 ? (gross / loaded) : 0;
+        const rpmNum = parseFloat(rawRpm.toFixed(2));
 
         tG += gross; tM += totalMiles; tLM += loaded;
 
@@ -183,6 +171,10 @@ function renderDashboard(data) {
         if (item.TYPE === 'PARTIAL') typeColor = "bg-green-100 text-green-700";
         else if (item.TYPE === 'TONU') typeColor = "bg-orange-100 text-orange-700";
         
+        let rptmClass = "bg-red-100 text-red-700";
+        if (rptmNum >= 3.00) rptmClass = "bg-green-500 text-white";
+        else if (rptmNum >= 2.50) rptmClass = "bg-yellow-200 text-black";
+
         let actionsTd = editModeActive ? `<td class="p-4 flex gap-2 justify-center">
             <button onclick="openEditModal(${index})" class="hover:scale-125 transition-all text-lg mx-2">✏️</button>
             <button onclick="deleteRecord(${index})" class="hover:scale-125 transition-all text-lg">🗑️</button>
@@ -197,47 +189,43 @@ function renderDashboard(data) {
             <td class="p-4 text-right">${loaded}</td>
             <td class="p-4 text-right font-black">$${gross.toLocaleString()}</td>
             <td class="p-4 text-right font-black text-blue-700 bg-blue-50">${rpmNum.toFixed(2)}</td>
-            <td class="p-4 text-right font-black ${rptmNum >= 3 ? 'bg-green-500 text-white' : 'bg-red-100 text-red-700'}">${rptmNum.toFixed(2)}</td>
+            <td class="p-4 text-right font-black ${rptmClass}">${rptmNum.toFixed(2)}</td>
             ${actionsTd}
         </tr>`;
 
-        if(!truckMap[item.TRUCK]) truckMap[item.TRUCK] = { weeks: {} };
+        if(!truckMap[item.TRUCK]) truckMap[item.TRUCK] = { weeks: {}, totalGross: 0, totalMiles: 0, totalLoaded: 0 };
         const weekIndex = Math.ceil(new Date(item.DATE).getUTCDate() / 7); 
         if(!truckMap[item.TRUCK].weeks[weekIndex]) truckMap[item.TRUCK].weeks[weekIndex] = { gross: 0, totalMiles: 0, loadedMiles: 0 };
+        
         truckMap[item.TRUCK].weeks[weekIndex].gross += gross;
         truckMap[item.TRUCK].weeks[weekIndex].totalMiles += totalMiles;
         truckMap[item.TRUCK].weeks[weekIndex].loadedMiles += loaded;
+        
+        // Track overall totals for the sidebar bottom row
+        truckMap[item.TRUCK].totalGross += gross;
+        truckMap[item.TRUCK].totalMiles += totalMiles;
+        truckMap[item.TRUCK].totalLoaded += loaded;
     });
 
     if (truckContainer) {
         truckContainer.innerHTML = '';
-        
         let truckList = Object.keys(truckMap).map(id => {
-            let tg = 0, tm = 0; 
-            Object.values(truckMap[id].weeks).forEach(w => { tg += w.gross; tm += w.totalMiles; });
-            return { id, weeks: truckMap[id].weeks, avgRptm: tm > 0 ? tg/tm : 0, totalGross: tg };
+            const t = truckMap[id];
+            return { id, weeks: t.weeks, avgRptm: t.totalMiles > 0 ? t.totalGross/t.totalMiles : 0, totalGross: t.totalGross, totalMiles: t.totalMiles, totalLoaded: t.totalLoaded };
         });
 
-        // 1. Identify the absolute winners
         const bestPerformanceTruck = [...truckList].sort((a, b) => b.avgRptm - a.avgRptm)[0];
         const highestGrossTruck = [...truckList].sort((a, b) => b.totalGross - a.totalGross)[0];
-
         const goldId = bestPerformanceTruck?.id;
         const silverId = highestGrossTruck?.id;
 
-        // 2. Sort the list by Performance for general order
         truckList.sort((a, b) => b.avgRptm - a.avgRptm);
 
-        // 3. FORCE POSITIONING
-        // If same truck wins both: It stays in 1st place.
-        // If different trucks: Gold winner is 1st, Silver winner is 2nd.
-        if (truckList.length > 1) {
-            if (goldId === silverId) {
-                // Already in 1st due to performance sort, no change needed.
-            } else {
-                // Remove silver winner from wherever it is and place it at index 1
+        if (truckList.length > 1 && goldId !== silverId) {
+            const sWinnerObj = truckList.find(t => t.id === silverId);
+            if (sWinnerObj) {
                 truckList = truckList.filter(t => t.id !== silverId);
-                truckList.splice(1, 0, highestGrossTruck);
+                truckList.splice(1, 0, sWinnerObj);
             }
         }
 
@@ -265,7 +253,24 @@ function renderDashboard(data) {
                 }
             }
 
-            // Assign trophies (Truck can have both)
+            // ADDED: Logic for the "TOTALS" row at the bottom of the card
+            const totalRpm = truck.totalLoaded > 0 ? (truck.totalGross / truck.totalLoaded).toFixed(2) : "-";
+            const totalRptm = truck.totalMiles > 0 ? (truck.totalGross / truck.totalMiles).toFixed(2) : "-";
+
+            const totalsRowHtml = `
+                <div class="grid grid-cols-[45px_55px_60px_50px] items-center text-[11.5px] py-1 border-t-2 border-blue-100 bg-blue-50/50 whitespace-nowrap overflow-hidden">
+                    <span class="font-black text-blue-600 uppercase text-[9px]">TOTAL</span>
+                    <span class="text-blue-900 font-black">$${truck.totalGross.toLocaleString()}</span>
+                    <div class="flex gap-1 items-center">
+                        <span class="text-blue-400 text-[10px] uppercase font-bold">RPM:</span>
+                        <span class="font-black text-blue-900">${totalRpm}</span>
+                    </div>
+                    <div class="flex gap-1 items-center">
+                        <span class="text-blue-400 text-[10px] uppercase font-bold">RPTM:</span>
+                        <span class="font-black text-blue-900">${totalRptm}</span>
+                    </div>
+                </div>`;
+
             let trophy = '';
             if (truck.id === goldId) trophy += '<span class="ml-1" title="Best Performance">🏆</span>';
             if (truck.id === silverId) trophy += '<span class="ml-1" title="Highest Revenue">🥈</span>';
@@ -276,11 +281,7 @@ function renderDashboard(data) {
                     <p class="text-[13px] font-black uppercase mb-1.5 flex items-center tracking-tight">
                         UNIT #${truck.id} ${trophy}
                     </p>
-                    <div class="flex flex-col">${weeklyHtml}</div>
-                    <div class="mt-2 pt-1 border-t border-dashed border-gray-200 flex justify-between items-center px-0.5">
-                         <span class="text-[12px] font-black uppercase text-blue-700 tracking-tighter">Monthly Total</span>
-                         <span class="text-[12px] font-black text-slate-900">$${truck.totalGross.toLocaleString()}</span>
-                    </div>
+                    <div class="flex flex-col">${weeklyHtml}${totalsRowHtml}</div>
                 </div>`;
         });
     }
@@ -291,7 +292,6 @@ function renderDashboard(data) {
     document.getElementById('load-count').innerText = data.length;
 }
 
-// 7. DATA HANDLERS & UTILS
 function exportToCSV() {
     let rows = document.querySelectorAll("table tr");
     let csv = Array.from(rows).map(row => Array.from(row.querySelectorAll("th, td")).map(td => `"${td.innerText.replace(/"/g, '""')}"`).join(",")).join("\n");
