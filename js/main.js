@@ -24,34 +24,71 @@ let assignedTruck = '';
 let currentData = []; 
 let filteredData = []; 
 let sortState = { column: 'DATE', direction: 'desc' };
+let weekSortDirection = 'asc'; // Initial state: Oldest to Newest
 
 function showSync() { document.getElementById('sync-indicator').classList.remove('hidden'); }
 function hideSync() { document.getElementById('sync-indicator').classList.add('hidden'); }
 
 // 4. AUTH LOGIC
-function checkKey() {
-    const input = document.getElementById('access-key').value.trim();
+function checkKey(autoLoginKey = null) {
+    const input = autoLoginKey || document.getElementById('access-key').value.trim();
+    
     if (input.toUpperCase() === VIEW_KEY) {
         userRole = 'admin'; 
-        document.getElementById('mode-toggle').classList.remove('hidden'); 
+        if (document.getElementById('mode-toggle')) document.getElementById('mode-toggle').classList.remove('hidden'); 
+        sessionStorage.setItem('vd_access_key', input); // Remembers login
         enterDashboard();
     } else if (ALLOWED_TRUCKS.includes(input)) {
         userRole = 'driver'; 
         assignedTruck = input; 
+        sessionStorage.setItem('vd_access_key', input); // Remembers login
         enterDashboard();
-    } else { alert('Invalid Access Key'); }
+    } else { 
+        if (!autoLoginKey) alert('Invalid Access Key'); 
+    }
 }
 
-function enterDashboard() {
-    document.getElementById('auth-screen').classList.add('hidden');
-    document.getElementById('dashboard').classList.remove('hidden');
-    const currentMonthName = new Date().toLocaleString('en-US', { month: 'long' });
-    const monthSelect = document.getElementById('month-select');
-    if (monthSelect) monthSelect.value = currentMonthName;
-    loadData();
+async function enterDashboard() {
+    if (document.getElementById('auth-screen')) document.getElementById('auth-screen').classList.add('hidden');
+    if (document.getElementById('dashboard')) document.getElementById('dashboard').classList.remove('hidden');
     
+    // 1. Fetch data from Google Sheets
+    await loadData();
+    
+    // 2. Identify Current Time
+    const now = new Date();
+    const currentYear = now.getUTCFullYear().toString();
+    const currentMonthName = now.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+
+    // 3. Calculate Current Week Index (Matching your grouping logic)
+    const dateNum = now.getUTCDate();
+    const firstOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    let firstWeekday = firstOfMonth.getUTCDay();
+    if (firstWeekday === 0) firstWeekday = 7;
+    
+    let weekIndex = Math.ceil((dateNum + firstWeekday - 1) / 7);
+    if (firstWeekday >= 6 && weekIndex > 1) weekIndex -= 1;
+    if (weekIndex > 5) weekIndex = 5;
+    const currentWeekStr = `Week ${weekIndex}`;
+
+    // 4. Set Selectors (Crucial Order: Set values BEFORE applyFilters)
+    const truckSel = document.getElementById('truck-select');
+    const weekSel = document.getElementById('week-select');
+    const monthSel = document.getElementById('month-select');
+    const yearSel = document.getElementById('year-select');
+
+    if (truckSel && userRole === 'admin') truckSel.value = "ALL";
+    if (monthSel) monthSel.value = currentMonthName;
+    if (yearSel) yearSel.value = currentYear;
+    if (weekSel) weekSel.value = currentWeekStr;
+
+    // 5. Force a clean filter run with these new defaults
+    applyFilters();
+    
+    // 6. Start the 3-second background sync
     setInterval(() => {
-        if (document.getElementById('edit-modal').classList.contains('hidden')) {
+        const editModal = document.getElementById('edit-modal');
+        if (!editModal || editModal.classList.contains('hidden')) {
             loadData();
         }
     }, 3000);
@@ -61,8 +98,12 @@ async function loadData() {
     try {
         const response = await fetch(`${SCRIPT_URL}?t=${Date.now()}`); 
         const data = await response.json();
+        
+        // Determine role-based data
         currentData = (userRole === 'driver') ? data.filter(item => String(item["TRUCK"]) === assignedTruck) : data;
+        
         populateYearFilter(); 
+        populateTruckFilter(); // <--- This now uses your ALLOWED_TRUCKS constant
         applyFilters();       
     } catch (err) { console.error("Sync Error:", err); }
 }
@@ -83,14 +124,43 @@ function populateYearFilter() {
 }
 
 function applyFilters() {
-    const selMonth = document.getElementById('month-select').value;
-    const selYear = document.getElementById('year-select').value;
+    const monthSelect = document.getElementById('month-select');
+    const yearSelect = document.getElementById('year-select');
+    const weekSelect = document.getElementById('week-select');
+    const truckSelect = document.getElementById('truck-select');
+
+    const selMonth = monthSelect ? monthSelect.value : "ALL";
+    const selYear = yearSelect ? yearSelect.value : "ALL";
+    const selWeek = weekSelect ? weekSelect.value : "ALL";
+    const selTruck = truckSelect ? truckSelect.value : "ALL";
+
     filteredData = currentData.filter(item => {
         const d = new Date(item.DATE);
         const itemMonth = d.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).split(' ')[0];
         const itemYear = d.getUTCFullYear().toString();
-        return (selMonth === "ALL" || itemMonth === selMonth) && (selYear === "ALL" || itemYear === selYear);
+        const itemTruck = item.TRUCK.toString();
+
+        let monthMatch = (selMonth === "ALL" || itemMonth === selMonth);
+        let yearMatch = (selYear === "ALL" || itemYear === selYear);
+        let truckMatch = (selTruck === "ALL" || itemTruck === selTruck);
+
+        let weekMatch = true;
+        if (weekSelect && selWeek !== "ALL") {
+            const dateNum = d.getUTCDate();
+            const firstOfMonth = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+            let firstWeekday = firstOfMonth.getUTCDay();
+            if (firstWeekday === 0) firstWeekday = 7;
+            
+            let weekIndex = Math.ceil((dateNum + firstWeekday - 1) / 7);
+            if (firstWeekday >= 6 && weekIndex > 1) weekIndex -= 1;
+            if (weekIndex > 5) weekIndex = 5;
+
+            weekMatch = (selWeek === `Week ${weekIndex}`);
+        }
+
+        return monthMatch && yearMatch && weekMatch && truckMatch;
     });
+
     applySort();
 }
 
@@ -138,7 +208,13 @@ function applySort() {
         if (dateA !== dateB) return sortState.direction === 'asc' ? dateA - dateB : dateB - dateA;
         return Number(a.TRUCK) - Number(b.TRUCK);
     });
-    renderDashboard(filteredData);
+    
+    // --- ROUTER: Detects which page you are on ---
+    if (document.getElementById('week-select')) {
+        renderWeeksDashboard(filteredData);
+    } else {
+        renderDashboard(filteredData);
+    }
 }
 
 function renderDashboard(data) {
@@ -194,7 +270,27 @@ function renderDashboard(data) {
         </tr>`;
 
         if(!truckMap[item.TRUCK]) truckMap[item.TRUCK] = { weeks: {}, totalGross: 0, totalMiles: 0, totalLoaded: 0 };
-        const weekIndex = Math.ceil(new Date(item.DATE).getUTCDate() / 7); 
+        // --- NEW WEEK LOGIC START ---
+        const d = new Date(item.DATE);
+        const dateNum = d.getUTCDate();
+
+        // 1. Find what day of the week the 1st of this month falls on
+        const firstOfMonth = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+        let firstWeekday = firstOfMonth.getUTCDay();
+        if (firstWeekday === 0) firstWeekday = 7; // Convert standard Sunday (0) to 7 for Monday-start logic
+
+        // 2. Calculate the calendar week index (Week 1 ends on the first Sunday)
+        let weekIndex = Math.ceil((dateNum + firstWeekday - 1) / 7);
+
+        // 3. Apply Spreadsheet Logic: If month starts on Sat (6) or Sun (7), 
+        // do not count it as a standalone week. Merge it into the first full week.
+        if (firstWeekday >= 6 && weekIndex > 1) {
+            weekIndex -= 1;
+        }
+
+        // 4. Cap at Week 5 for the UI limit
+        if (weekIndex > 5) weekIndex = 5;
+        // --- NEW WEEK LOGIC END --- 
         if(!truckMap[item.TRUCK].weeks[weekIndex]) truckMap[item.TRUCK].weeks[weekIndex] = { gross: 0, totalMiles: 0, loadedMiles: 0 };
         
         truckMap[item.TRUCK].weeks[weekIndex].gross += gross;
@@ -209,6 +305,36 @@ function renderDashboard(data) {
 
     if (truckContainer) {
         truckContainer.innerHTML = '';
+
+        // --- SPLIT WEEK LOOKAHEAD LOGIC ---
+        const selMonth = document.getElementById('month-select').value;
+        const selYear = document.getElementById('year-select').value;
+        let splitStart = null, splitEnd = null, lastWeekIndex = 5;
+
+        if (selMonth !== "ALL" && selYear !== "ALL") {
+            const mIdx = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].indexOf(selMonth);
+            // Get the very last day of the selected month
+            const lastDayDate = new Date(Date.UTC(selYear, mIdx + 1, 0)); 
+            let lastDayOfWeek = lastDayDate.getUTCDay();
+            if (lastDayOfWeek === 0) lastDayOfWeek = 7; // Convert Sunday to 7
+
+            // If the month ends mid-week (Mon-Sat), calculate the next month's days
+            if (lastDayOfWeek < 7) {
+                splitStart = new Date(lastDayDate.getTime() + 86400000); // +1 day
+                splitEnd = new Date(lastDayDate.getTime() + ((7 - lastDayOfWeek) * 86400000));
+
+                // Find out what week index this last day falls into based on our spreadsheet logic
+                const dateNum = lastDayDate.getUTCDate();
+                const firstOfMonth = new Date(Date.UTC(selYear, mIdx, 1));
+                let firstWeekday = firstOfMonth.getUTCDay();
+                if (firstWeekday === 0) firstWeekday = 7;
+                lastWeekIndex = Math.ceil((dateNum + firstWeekday - 1) / 7);
+                if (firstWeekday >= 6 && lastWeekIndex > 1) lastWeekIndex -= 1;
+                if (lastWeekIndex > 5) lastWeekIndex = 5;
+            }
+        }
+        // ----------------------------------
+
         let truckList = Object.keys(truckMap).map(id => {
             const t = truckMap[id];
             return { id, weeks: t.weeks, avgRptm: t.totalMiles > 0 ? t.totalGross/t.totalMiles : 0, totalGross: t.totalGross, totalMiles: t.totalMiles, totalLoaded: t.totalLoaded };
@@ -250,10 +376,50 @@ function renderDashboard(data) {
                                 <span class="font-black text-slate-950">${wRptm}</span>
                             </div>
                         </div>`;
+
+                    // --- INJECT SECOND ROW FOR CROSS-MONTH DATA ---
+                    if (i === lastWeekIndex && splitStart) {
+                        let exGross = 0, exLoaded = 0, exTotal = 0;
+                        
+                        // Look ahead into the raw dataset for the cross-month days
+                        currentData.forEach(item => {
+                            if (item.TRUCK.toString() === truck.id.toString()) {
+                                const d = new Date(item.DATE);
+                                if (d >= splitStart && d <= splitEnd) {
+                                    exGross += (Number(item.GROSS) || 0);
+                                    exLoaded += (Number(item.LOADEDMILES) || 0);
+                                    exTotal += ((Number(item.LOADEDMILES) || 0) + (Number(item.DEADHEAD) || 0));
+                                }
+                            }
+                        });
+
+                        // Only show the row if they actually drove in those next-month days
+                        if (exTotal > 0 || exGross > 0) {
+                            const cbGross = wData.gross + exGross;
+                            const cbLoaded = wData.loadedMiles + exLoaded;
+                            const cbTotal = wData.totalMiles + exTotal;
+                            const cRpm = cbLoaded > 0 ? (cbGross / cbLoaded).toFixed(2) : "-";
+                            const cRptm = cbTotal > 0 ? (cbGross / cbTotal).toFixed(2) : "-";
+
+                            weeklyHtml += `
+                                <div class="grid grid-cols-[45px_55px_60px_50px] items-center text-[9px] py-0.5 bg-gray-50/80 whitespace-nowrap overflow-hidden">
+                                    <span class="italic text-gray-400 font-medium pl-1 text-[8.5px]">↳ Full </span>
+                                    <span class="text-blue-700/80 font-bold">$${cbGross.toLocaleString()}</span>
+                                    <div class="flex gap-1 items-center text-gray-500/80">
+                                        <span class="text-[8px] uppercase">RPM:</span>
+                                        <span class="font-bold text-[9px]">${cRpm}</span>
+                                    </div>
+                                    <div class="flex gap-1 items-center text-gray-500/80">
+                                        <span class="text-[8px] uppercase">RPTM:</span>
+                                        <span class="font-bold text-[9px]">${cRptm}</span>
+                                    </div>
+                                </div>`;
+                        }
+                    }
+                    // ----------------------------------------------
                 }
             }
 
-            // ADDED: Logic for the "TOTALS" row at the bottom of the card
             const totalRpm = truck.totalLoaded > 0 ? (truck.totalGross / truck.totalLoaded).toFixed(2) : "-";
             const totalRptm = truck.totalMiles > 0 ? (truck.totalGross / truck.totalMiles).toFixed(2) : "-";
 
@@ -309,6 +475,11 @@ function filterTable() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    const savedKey = sessionStorage.getItem('vd_access_key');
+    if (savedKey) {
+        checkKey(savedKey); // Auto-login if key is saved
+    }
+
     document.getElementById('access-key')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') checkKey(); });
     document.getElementById('master-pass-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') verifyMasterCode(); });
     const form = document.getElementById('load-form');
@@ -388,3 +559,192 @@ async function saveEdit(e, originalItem) {
 }
 
 function closeEditModal() { document.getElementById('edit-modal').classList.add('hidden'); }
+
+function populateTruckFilter() {
+    const truckSelect = document.getElementById('truck-select');
+    if (!truckSelect) return;
+
+    // --- STEP 1: REMEMBER WHAT IS CURRENTLY SELECTED ---
+    const currentSelection = truckSelect.value;
+
+    truckSelect.innerHTML = '';
+
+    if (userRole === 'admin') {
+        // Start with "All Trucks"
+        // Check if "ALL" was the previous selection
+        let options = `<option value="ALL" ${currentSelection === 'ALL' ? 'selected' : ''}>All Trucks</option>`;
+        
+        const sortedTrucks = [...ALLOWED_TRUCKS].sort((a, b) => a - b);
+        
+        sortedTrucks.forEach(t => {
+            // --- STEP 2: CHECK IF THIS TRUCK WAS THE ONE SELECTED ---
+            const isSelected = (t === currentSelection) ? 'selected' : '';
+            options += `<option value="${t}" ${isSelected}>Truck #${t}</option>`;
+        });
+        
+        truckSelect.innerHTML = options;
+    } else {
+        // Drivers are locked to their truck anyway
+        truckSelect.innerHTML = `<option value="${assignedTruck}" selected>Truck #${assignedTruck}</option>`;
+        truckSelect.disabled = true;
+    }
+}
+
+function toggleWeekSort() {
+    weekSortDirection = (weekSortDirection === 'asc') ? 'desc' : 'asc';
+    const btn = document.getElementById('week-sort-btn');
+    if (btn) {
+        btn.innerText = weekSortDirection === 'asc' ? 'OLDEST' : 'NEWEST';
+    }
+    applyFilters(); // Re-renders the dashboard with the new sort
+}
+
+function renderWeeksDashboard(data) {
+    const tbody = document.getElementById('ledger-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    const selMonth = document.getElementById('month-select')?.value || "ALL";
+    const selYear = document.getElementById('year-select')?.value || "ALL";
+
+    // 1. NESTED GROUPING: Month -> Week -> Truck
+    let nestedData = {}; 
+
+    data.forEach(item => {
+        if (!item.DATE) return;
+        const truck = item.TRUCK;
+        const d = new Date(item.DATE);
+        if (isNaN(d)) return; // Skip invalid dates
+
+        const year = d.getUTCFullYear();
+        const monthIndex = d.getUTCMonth();
+        const monthName = d.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+        
+        const dateNum = d.getUTCDate();
+        const firstOfMonth = new Date(Date.UTC(year, monthIndex, 1));
+        let firstWeekday = firstOfMonth.getUTCDay();
+        if (firstWeekday === 0) firstWeekday = 7;
+        
+        let weekIndex = Math.ceil((dateNum + firstWeekday - 1) / 7);
+        if (firstWeekday >= 6 && weekIndex > 1) weekIndex -= 1;
+        if (weekIndex > 5) weekIndex = 5;
+
+        const monthKey = `${year}-${String(monthIndex).padStart(2, '0')}`;
+        
+        if (!nestedData[monthKey]) {
+            nestedData[monthKey] = { name: monthName, year: year, index: monthIndex, weeks: {} };
+        }
+        if (!nestedData[monthKey].weeks[weekIndex]) {
+            nestedData[monthKey].weeks[weekIndex] = {};
+        }
+        if (!nestedData[monthKey].weeks[weekIndex][truck]) {
+            nestedData[monthKey].weeks[weekIndex][truck] = { loaded: 0, empty: 0, gross: 0 };
+        }
+
+        nestedData[monthKey].weeks[weekIndex][truck].loaded += (Number(item.LOADEDMILES) || 0);
+        nestedData[monthKey].weeks[weekIndex][truck].empty += (Number(item.DEADHEAD) || 0);
+        nestedData[monthKey].weeks[weekIndex][truck].gross += (Number(item.GROSS) || 0);
+    });
+
+    // 2. SORT MONTHS (Based on Toggle)
+    const sortedMonthKeys = Object.keys(nestedData).sort((a, b) => {
+        return weekSortDirection === 'asc' ? a.localeCompare(b) : b.localeCompare(a);
+    });
+
+    // --- TOP GAP (h-5, border-free) ---
+    let html = `<tr class="bg-gray-100 !border-0 !border-transparent"><td colspan="8" class="h-5 !border-0 !border-transparent bg-gray-100"></td></tr>`;
+
+    // 3. RENDER NESTED STRUCTURE
+    sortedMonthKeys.forEach(mKey => {
+        const monthObj = nestedData[mKey];
+        let weekKeys = Object.keys(monthObj.weeks);
+        
+        // Always sort weeks Ascending if "All Months" is chosen, otherwise follow toggle
+        if (selMonth === "ALL") {
+            weekKeys.sort((a, b) => Number(a) - Number(b));
+        } else {
+            weekKeys.sort((a, b) => weekSortDirection === 'asc' ? Number(a) - Number(b) : Number(b) - Number(a));
+        }
+
+        weekKeys.forEach((wIndex, wArrayIdx) => {
+            const weekTrucks = monthObj.weeks[wIndex];
+            const sortedTrucks = Object.keys(weekTrucks).sort((a, b) => Number(a) - Number(b));
+
+            // CALCULATE DATE RANGE STRING
+            const firstOfMonth = new Date(Date.UTC(monthObj.year, monthObj.index, 1));
+            let firstWeekday = firstOfMonth.getUTCDay();
+            if (firstWeekday === 0) firstWeekday = 7;
+            const lastDayOfMonth = new Date(Date.UTC(monthObj.year, monthObj.index + 1, 0)).getUTCDate();
+            
+            let minDay = 32, maxDay = 0;
+            for (let i = 1; i <= lastDayOfMonth; i++) {
+                let currW = Math.ceil((i + firstWeekday - 1) / 7);
+                if (firstWeekday >= 6 && currW > 1) currW -= 1;
+                if (currW > 5) currW = 5;
+                if (Number(currW) === Number(wIndex)) {
+                    if (i < minDay) minDay = i;
+                    if (i > maxDay) maxDay = i;
+                }
+            }
+            const dateRangeStr = `${monthObj.name.substring(0, 3)} ${String(minDay).padStart(2, '0')} - ${String(maxDay).padStart(2, '0')}`;
+
+            // --- GAP BETWEEN WEEKS (h-6, border-free) ---
+            if (html !== '' && !(mKey === sortedMonthKeys[0] && wArrayIdx === 0)) {
+                html += `<tr class="bg-gray-100 !border-0 !border-transparent"><td colspan="8" class="h-6 !border-0 !border-transparent bg-gray-100"></td></tr>`;
+            }
+
+            // --- WEEK HEADER BANNER ---
+            html += `
+                <tr class="bg-blue-50 border-t-4 border-blue-400">
+                    <td colspan="8" class="px-4 py-4 text-left font-black text-blue-800 uppercase tracking-widest text-[12.24px]">
+                        📅 ${monthObj.name} ${monthObj.year} - WEEK ${wIndex} SUMMARY
+                    </td>
+                </tr>
+                <tr class="bg-white border-b-2 border-gray-100 uppercase font-black text-slate-900">
+                    <th class="px-4 py-3 text-left w-40 text-[13.1px]">Date</th>
+                    <th class="px-4 py-3 text-left w-28 text-[13.1px]">Truck</th>                                    
+                    <th class="px-4 py-3 text-left text-[13.1px]">Empty Miles</th>
+                    <th class="px-4 py-3 text-left text-[13.1px]">Loaded Miles</th>
+                    <th class="px-4 py-3 text-left text-[13.1px]">Total Miles</th>
+                    <th class="px-4 py-3 text-left text-[13.1px]">Gross</th>
+                    <th class="px-4 py-3 text-left text-[13.1px]">RPM</th>     
+                    <th class="px-4 py-3 text-left text-[13.1px]">RPTM</th>
+                </tr>
+            `;
+
+            sortedTrucks.forEach((truck, index) => {
+                const t = weekTrucks[truck];
+                const totalMiles = t.loaded + t.empty;
+                const rpm = t.loaded > 0 ? (t.gross / t.loaded).toFixed(2) : "0.00";
+                const rptm = totalMiles > 0 ? (t.gross / totalMiles).toFixed(2) : "0.00";
+
+                let rptmClass = "text-slate-900";
+                if (parseFloat(rptm) >= 3.00) rptmClass = "text-green-600";
+                else if (parseFloat(rptm) >= 2.50) rptmClass = "text-yellow-500";
+                
+                let isLast = index === sortedTrucks.length - 1;
+                let borderClass = isLast ? "border-b-4 border-gray-200" : "border-b border-gray-50";
+
+                html += `
+                    <tr class="bg-white hover:bg-blue-50/50 transition-colors ${borderClass}">
+                        <td class="px-4 py-4 font-bold text-slate-900 text-left text-[11.2px] uppercase whitespace-nowrap">${dateRangeStr}</td>
+                        <td class="px-4 py-4 font-black text-blue-600 text-[12.1px] text-left">#${truck}</td>
+                        <td class="px-4 py-4 font-bold text-slate-900 text-left text-[11.9px]">${t.empty}</td>
+                        <td class="px-4 py-4 font-bold text-slate-900 text-left text-[11.9px]">${t.loaded}</td>
+                        <td class="px-4 py-4 font-black text-slate-900 text-left text-[11.9px]">${totalMiles}</td>
+                        <td class="px-4 py-4 font-black text-green-600 text-left text-[11.9px]">$${t.gross.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                        <td class="px-4 py-4 font-black text-blue-600 text-left text-[11.9px]">${rpm}</td>
+                        <td class="px-4 py-4 font-black ${rptmClass} text-left text-[11.9px]">${rptm}</td>
+                    </tr>
+                `;
+            });
+        });
+    });
+
+    // Check if we actually have HTML to show (besides just the top gap)
+    if (sortedMonthKeys.length === 0) {
+        html = `<tr><td colspan="8" class="p-8 text-center text-gray-400 font-bold uppercase tracking-widest">No loads found for this selection</td></tr>`;
+    }
+
+    tbody.innerHTML = html;
+}

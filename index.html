@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VD Freight LLC | Fleet Portal</title>
+    <title>Fleet Portal</title>
     <link rel="icon" type="image/x-icon" href="img/favicon.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="js/main.js" defer></script>
@@ -32,10 +32,10 @@
         </div>
 
         <div class="flex justify-between items-center mb-6">
-            <h2 class="text-3xl font-black text-slate-800 uppercase tracking-tighter">Fleet Portal</h2>
+            <h2 onclick="location.reload()" title="Reload Page" class="text-3xl font-black text-slate-800 uppercase tracking-tighter cursor-pointer hover:text-blue-700 hover:scale-105 transform origin-left transition-all duration-200">Fleet Portal</h2>
             <div class="flex gap-2">
                 <button id="mode-toggle" onclick="requestEditAccess()" class="hidden bg-slate-800 text-white px-4 py-2 rounded shadow-md font-bold text-xs uppercase hover:bg-blue-700 transition-all">🔒 ENTER EDIT MODE</button>
-                <button onclick="location.reload()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded font-bold text-xs uppercase hover:bg-gray-300 transition-all">🚪 SIGN OUT</button>
+                <button onclick="sessionStorage.removeItem('vd_access_key'); location.reload()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded font-bold text-xs uppercase hover:bg-gray-300 transition-all">🚪 SIGN OUT</button>
             </div>
         </div>
 
@@ -146,6 +146,11 @@
             </div>
 
             <div id="sidebar-container" class="lg:col-span-1">
+
+                <a href="weeks.html" class="block w-full text-center bg-blue-600 text-white px-4 py-3 rounded-lg shadow-md font-black text-xs uppercase hover:bg-blue-700 hover:scale-105 transform transition-all duration-200 mb-4 border-b-4 border-blue-800 tracking-widest">
+                    📊 WEEK PERFORMANCE
+                </a>
+
                 <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                     <h2 class="text-xs font-black mb-4 text-gray-500 uppercase tracking-widest">Fleet Performance</h2>
                     <div id="truck-stats" class="space-y-4"></div>
