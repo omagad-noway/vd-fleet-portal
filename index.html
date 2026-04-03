@@ -16,13 +16,28 @@
     </style>
 </head>
 <body class="bg-gray-100 font-sans">
-    <div id="auth-screen" class="fixed inset-0 bg-slate-900 flex items-center justify-center z-50">
+    <div id="auth-screen" class="fixed inset-0 bg-slate-900 flex items-center justify-center z-[9999]">
         <div class="bg-white p-8 rounded-lg shadow-xl text-center w-80">
             <div class="flex justify-center mb-6">
                 <img src="img/logo.jpg" alt="VD Freight Logo" class="h-32 object-contain">
             </div>
-            <input type="password" id="access-key" placeholder="Enter Access Key" class="border-2 p-3 rounded-md mb-4 w-full text-center outline-none">
-            <button onclick="checkKey()" class="bg-blue-600 text-white px-6 py-3 rounded-md w-full font-bold shadow-lg">Unlock Dashboard</button>
+            
+            <form onsubmit="event.preventDefault(); checkKey();">
+                <input 
+                    id="access-key" 
+                    type="password" 
+                    inputmode="numeric" 
+                    placeholder="ENTER ACCESS KEY" 
+                    class="w-full border-2 border-slate-200 rounded-lg p-3 mb-4 text-center font-bold tracking-widest focus:border-blue-500 outline-none"
+                >
+                
+                <button 
+                    type="submit"
+                    class="block w-full text-center bg-blue-600 text-white px-4 py-3 rounded-lg shadow-md font-black text-xs uppercase hover:bg-blue-700 hover:scale-105 transform transition-all duration-200 border-b-4 border-blue-800 tracking-widest"
+                >
+                    Unlock Dashboard
+                </button>
+            </form>
         </div>
     </div>
 
