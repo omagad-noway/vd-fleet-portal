@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Week Performance</title>
+    <link rel="icon" type="image/x-icon" href="img/favicon.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="js/main.js" defer></script>
+    <style>
+        @media print {
+            body * { visibility: hidden; }
+            #print-section, #print-section * { visibility: visible; }
+            #print-section { position: absolute; left: 0; top: 0; width: 100%; display: block !important; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+    <div class="p-4 max-w-7xl mx-auto"> 
+        
+        <div class="flex justify-between items-center mb-6">
+            <h2 onclick="location.reload()" title="Reload Page" class="text-3xl font-black text-slate-800 uppercase tracking-tighter cursor-pointer hover:text-blue-700 hover:scale-105 transform origin-left transition-all duration-200">Week Performance</h2>
+            <div class="flex gap-2">
+                <a href="index.html" class="bg-gray-200 text-gray-700 px-4 py-2 rounded font-bold text-xs uppercase hover:bg-gray-300 transition-all flex items-center">
+                    ⬅️ GO BACK
+                </a>
+            </div>
+        </div>
+
+        
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div class="lg:col-span-4">            
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-3 bg-gray-50 border-b flex justify-between items-center">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-bold text-gray-400 uppercase">View:</span>
+
+                            <select id="truck-select" onchange="applyFilters()" class="text-[11px] font-bold border rounded px-2 py-1 bg-white outline-none text-blue-900"></select>
+                            
+                            <select id="week-select" onchange="applyFilters()" class="text-[11px] font-bold border rounded px-2 py-1 bg-white outline-none text-blue-900">
+                                <option value="ALL">All Weeks</option>
+                                <option value="Week 1">Week 1</option>
+                                <option value="Week 2">Week 2</option>
+                                <option value="Week 3">Week 3</option>
+                                <option value="Week 4">Week 4</option>
+                                <option value="Week 5">Week 5</option>
+                            </select>
+
+                            <select id="month-select" onchange="applyFilters()" class="text-[11px] font-bold border rounded px-2 py-1 bg-white outline-none text-blue-900">
+                                <option value="ALL">All Months</option>
+                                <option value="January">January</option>
+                                <option value="February">February</option>
+                                <option value="March">March</option>
+                                <option value="April">April</option>
+                                <option value="May">May</option>
+                                <option value="June">June</option>
+                                <option value="July">July</option>
+                                <option value="August">August</option>
+                                <option value="September">September</option>
+                                <option value="October">October</option>
+                                <option value="November">November</option>
+                                <option value="December">December</option>
+                            </select>
+                            
+                            <select id="year-select" onchange="applyFilters()" class="text-[11px] font-bold border rounded px-2 py-1 bg-white outline-none text-blue-900"></select>
+
+                            <button id="week-sort-btn" onclick="toggleWeekSort()" class="bg-slate-800 text-white text-[10px] font-black px-3 py-1 rounded uppercase tracking-widest hover:bg-blue-600 transition-all">OLDEST</button>
+
+                        </div>
+                        
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <tbody id="ledger-body" class="text-sm"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+</div>
+
+</body>
+</html>
