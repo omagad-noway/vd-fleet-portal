@@ -30,22 +30,46 @@ function showSync() { document.getElementById('sync-indicator').classList.remove
 function hideSync() { document.getElementById('sync-indicator').classList.add('hidden'); }
 
 // 4. AUTH LOGIC
-function checkKey(autoLoginKey = null) {
-    const input = autoLoginKey || document.getElementById('access-key').value.trim();
+// UPDATED AUTH LOGIC FOR AUTO-UNLOCK
+function checkKey(inputValue = null) {
+    // Get the value from the input field
+    const input = (inputValue || document.getElementById('access-key').value).trim();
     
+    // 1. Check if it's the Admin Key
     if (input.toUpperCase() === VIEW_KEY) {
         userRole = 'admin'; 
-        if (document.getElementById('mode-toggle')) document.getElementById('mode-toggle').classList.remove('hidden'); 
-        sessionStorage.setItem('vd_access_key', input); // Remembers login
+        sessionStorage.setItem('vd_access_key', input);
         enterDashboard();
-    } else if (ALLOWED_TRUCKS.includes(input)) {
+    } 
+    // 2. Check if it's a Driver Truck Number
+    else if (ALLOWED_TRUCKS.includes(input)) {
         userRole = 'driver'; 
         assignedTruck = input; 
-        sessionStorage.setItem('vd_access_key', input); // Remembers login
+        sessionStorage.setItem('vd_access_key', input);
         enterDashboard();
-    } else { 
-        if (!autoLoginKey) alert('Invalid Access Key'); 
+    } 
+    // 3. Only show an alert if they actually clicked the "Unlock" button 
+    // and the key is wrong (not while they are just typing)
+    else if (!inputValue && input.length > 0) {
+        alert('Invalid Access Key');
     }
+}
+
+function enterDashboard() {
+    const authScreen = document.getElementById('auth-screen');
+    const dashboard = document.getElementById('dashboard');
+
+    if (authScreen) {
+        authScreen.style.display = 'none'; 
+        authScreen.classList.add('hidden');
+    }
+    
+    if (dashboard) {
+        dashboard.classList.remove('hidden');
+    }
+
+    // Start loading the data
+    loadData();
 }
 
 async function enterDashboard() {
@@ -695,7 +719,7 @@ function renderWeeksDashboard(data) {
 
             // --- WEEK HEADER BANNER ---
             html += `
-                <tr class="bg-blue-50 border-t-4 border-black">
+                <tr class="bg-blue-50 border-t-4 border-blue-400">
                     <td colspan="8" class="px-4 py-4 text-left font-black text-blue-800 uppercase tracking-widest text-[12.24px]">
                         📅 ${monthObj.name} ${monthObj.year} - WEEK ${wIndex} SUMMARY
                     </td>
@@ -705,7 +729,7 @@ function renderWeeksDashboard(data) {
                     <th class="px-4 py-3 text-left w-28 text-[13.1px]">Truck</th>                                    
                     <th class="px-4 py-3 text-left text-[13.1px]">Empty Miles</th>
                     <th class="px-4 py-3 text-left text-[13.1px]">Loaded Miles</th>
-
+                
                     <th class="px-4 py-3 text-left text-[13.1px]">Total Miles</th>
                     <th class="px-4 py-3 text-left text-[13.1px]">Gross</th>
                     <th class="px-4 py-3 text-left text-[13.1px]">RPM</th>     
