@@ -29,69 +29,33 @@ let weekSortDirection = 'asc'; // Initial state: Oldest to Newest
 function showSync() { document.getElementById('sync-indicator').classList.remove('hidden'); }
 function hideSync() { document.getElementById('sync-indicator').classList.add('hidden'); }
 
-// 4. AUTH LOGIC
-function checkKey(autoLoginKey = null) {
-    const input = autoLoginKey || document.getElementById('access-key').value.trim();
+// This is your EXACT OLD LOGIC that works perfectly on phones.
+function checkKey() {
+    const input = document.getElementById('access-key').value.trim();
     
     if (input.toUpperCase() === VIEW_KEY) {
         userRole = 'admin'; 
-        if (document.getElementById('mode-toggle')) document.getElementById('mode-toggle').classList.remove('hidden'); 
-        sessionStorage.setItem('vd_access_key', input); // Remembers login
+        document.getElementById('mode-toggle').classList.remove('hidden'); 
         enterDashboard();
     } else if (ALLOWED_TRUCKS.includes(input)) {
         userRole = 'driver'; 
         assignedTruck = input; 
-        sessionStorage.setItem('vd_access_key', input); // Remembers login
         enterDashboard();
     } else { 
-        if (!autoLoginKey) alert('Invalid Access Key'); 
+        alert('Invalid Access Key'); 
     }
 }
 
-async function enterDashboard() {
-    if (document.getElementById('auth-screen')) document.getElementById('auth-screen').classList.add('hidden');
-    if (document.getElementById('dashboard')) document.getElementById('dashboard').classList.remove('hidden');
+// Instant unlock, just like your old version
+function enterDashboard() {
+    document.getElementById('auth-screen').classList.add('hidden');
+    document.getElementById('dashboard').classList.remove('hidden');
     
-    // 1. Fetch data from Google Sheets
-    await loadData();
+    const currentMonthName = new Date().toLocaleString('en-US', { month: 'long' });
+    const monthSelect = document.getElementById('month-select');
+    if (monthSelect) monthSelect.value = currentMonthName;
     
-    // 2. Identify Current Time
-    const now = new Date();
-    const currentYear = now.getUTCFullYear().toString();
-    const currentMonthName = now.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
-
-    // 3. Calculate Current Week Index (Matching your grouping logic)
-    const dateNum = now.getUTCDate();
-    const firstOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    let firstWeekday = firstOfMonth.getUTCDay();
-    if (firstWeekday === 0) firstWeekday = 7;
-    
-    let weekIndex = Math.ceil((dateNum + firstWeekday - 1) / 7);
-    if (firstWeekday >= 6 && weekIndex > 1) weekIndex -= 1;
-    if (weekIndex > 5) weekIndex = 5;
-    const currentWeekStr = `Week ${weekIndex}`;
-
-    // 4. Set Selectors (Crucial Order: Set values BEFORE applyFilters)
-    const truckSel = document.getElementById('truck-select');
-    const weekSel = document.getElementById('week-select');
-    const monthSel = document.getElementById('month-select');
-    const yearSel = document.getElementById('year-select');
-
-    if (truckSel && userRole === 'admin') truckSel.value = "ALL";
-    if (monthSel) monthSel.value = currentMonthName;
-    if (yearSel) yearSel.value = currentYear;
-    if (weekSel) weekSel.value = currentWeekStr;
-
-    // 5. Force a clean filter run with these new defaults
-    applyFilters();
-    
-    // 6. Start the 3-second background sync
-    setInterval(() => {
-        const editModal = document.getElementById('edit-modal');
-        if (!editModal || editModal.classList.contains('hidden')) {
-            loadData();
-        }
-    }, 3000);
+    loadData(); // Starts downloading data AFTER screen is unlocked
 }
 
 async function loadData() {
