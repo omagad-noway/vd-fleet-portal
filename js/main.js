@@ -31,27 +31,20 @@ function hideSync() { document.getElementById('sync-indicator').classList.add('h
 
 // 4. AUTH LOGIC
 // UPDATED AUTH LOGIC FOR AUTO-UNLOCK
-function checkKey(inputValue = null) {
-    // Get the value from the input field
-    const input = (inputValue || document.getElementById('access-key').value).trim();
+function checkKey() {
+    const input = document.getElementById('access-key').value.trim();
     
-    // 1. Check if it's the Admin Key
     if (input.toUpperCase() === VIEW_KEY) {
         userRole = 'admin'; 
         sessionStorage.setItem('vd_access_key', input);
         enterDashboard();
-    } 
-    // 2. Check if it's a Driver Truck Number
-    else if (ALLOWED_TRUCKS.includes(input)) {
+    } else if (ALLOWED_TRUCKS.includes(input)) {
         userRole = 'driver'; 
         assignedTruck = input; 
         sessionStorage.setItem('vd_access_key', input);
         enterDashboard();
-    } 
-    // 3. Only show an alert if they actually clicked the "Unlock" button 
-    // and the key is wrong (not while they are just typing)
-    else if (!inputValue && input.length > 0) {
-        alert('Invalid Access Key');
+    } else { 
+        alert('Invalid Access Key'); 
     }
 }
 
