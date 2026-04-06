@@ -25,7 +25,7 @@ let assignedTruck = '';
 let currentData = []; 
 let filteredData = []; 
 let sortState = { column: 'DATE', direction: 'desc' };
-let weekSortDirection = 'asc'; // Initial state: Oldest to Newest
+let weekSortDirection = 'desc'; // Initial state: Newest to Oldest
 let expandedWeeks = new Set(); // Remembers which weeks are toggled open
 
 function showSync() { document.getElementById('sync-indicator').classList.remove('hidden'); }
@@ -142,28 +142,54 @@ function applyFilters() {
     const selWeek = weekSelect ? weekSelect.value : "ALL";
     const selTruck = truckSelect ? truckSelect.value : "ALL";
 
+    const isWeeksPage = weekSelect !== null; 
+
     filteredData = currentData.filter(item => {
         const d = new Date(item.DATE);
-        const itemMonth = d.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).split(' ')[0];
-        const itemYear = d.getUTCFullYear().toString();
         const itemTruck = item.TRUCK.toString();
-
-        let monthMatch = (selMonth === "ALL" || itemMonth === selMonth);
-        let yearMatch = (selYear === "ALL" || itemYear === selYear);
         let truckMatch = (selTruck === "ALL" || itemTruck === selTruck);
 
+        let monthMatch = false;
+        let yearMatch = false;
         let weekMatch = true;
-        if (weekSelect && selWeek !== "ALL") {
-            const dateNum = d.getUTCDate();
-            const firstOfMonth = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
-            let firstWeekday = firstOfMonth.getUTCDay();
-            if (firstWeekday === 0) firstWeekday = 7;
-            
-            let weekIndex = Math.ceil((dateNum + firstWeekday - 1) / 7);
-            if (firstWeekday >= 6 && weekIndex > 1) weekIndex -= 1;
-            if (weekIndex > 5) weekIndex = 5;
 
-            weekMatch = (selWeek === `Week ${weekIndex}`);
+        if (isWeeksPage) {
+            // --- CROSS-MONTH FILTER FIX ---
+            const dayOfWeek = d.getUTCDay() || 7; 
+            const weekStart = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - dayOfWeek + 1));
+            const weekEnd = new Date(Date.UTC(weekStart.getUTCFullYear(), weekStart.getUTCMonth(), weekStart.getUTCDate() + 6));
+
+            const startMonth = weekStart.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+            const endMonth = weekEnd.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+            const startYear = weekStart.getUTCFullYear().toString();
+            const endYear = weekEnd.getUTCFullYear().toString();
+
+            // Match if the selected month touches ANY part of this week
+            monthMatch = (selMonth === "ALL" || selMonth === startMonth || selMonth === endMonth);
+            yearMatch = (selYear === "ALL" || selYear === startYear || selYear === endYear);
+
+            if (selWeek !== "ALL") {
+                let anchorDate = weekStart;
+                if (selMonth !== "ALL" && endMonth === selMonth) {
+                    anchorDate = weekEnd; // Shift anchor to April if filtering by April
+                }
+                const dateNum = anchorDate.getUTCDate();
+                const firstOfMonth = new Date(Date.UTC(anchorDate.getUTCFullYear(), anchorDate.getUTCMonth(), 1));
+                let firstWeekday = firstOfMonth.getUTCDay();
+                if (firstWeekday === 0) firstWeekday = 7;
+                
+                let weekIndex = Math.ceil((dateNum + firstWeekday - 1) / 7);
+                if (firstWeekday >= 6 && weekIndex > 1) weekIndex -= 1;
+                if (weekIndex > 5) weekIndex = 5;
+
+                weekMatch = (selWeek === `Week ${weekIndex}`);
+            }
+        } else {
+            // Standard Dashboard Logic (Strict Literal Month)
+            const itemMonth = d.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+            const itemYear = d.getUTCFullYear().toString();
+            monthMatch = (selMonth === "ALL" || itemMonth === selMonth);
+            yearMatch = (selYear === "ALL" || itemYear === selYear);
         }
 
         return monthMatch && yearMatch && weekMatch && truckMatch;
@@ -602,7 +628,8 @@ function toggleWeekSort() {
     weekSortDirection = (weekSortDirection === 'asc') ? 'desc' : 'asc';
     const btn = document.getElementById('week-sort-btn');
     if (btn) {
-        btn.innerText = weekSortDirection === 'asc' ? 'OLDEST' : 'NEWEST';
+        // If we are currently sorting by 'desc' (Newest first), the button should offer 'OLDEST'
+        btn.innerText = weekSortDirection === 'asc' ? 'NEWEST' : 'OLDEST';
     }
     applyFilters(); // Re-renders the dashboard with the new sort
 }
@@ -644,6 +671,18 @@ function renderWeeksDashboard(data) {
     const selMonth = document.getElementById('month-select')?.value || "ALL";
     const selYear = document.getElementById('year-select')?.value || "ALL";
 
+    const getWeekIndex = (dateObj) => {
+        const dateNum = dateObj.getUTCDate();
+        const firstOfMonth = new Date(Date.UTC(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), 1));
+        let firstWeekday = firstOfMonth.getUTCDay();
+        if (firstWeekday === 0) firstWeekday = 7;
+        
+        let weekIndex = Math.ceil((dateNum + firstWeekday - 1) / 7);
+        if (firstWeekday >= 6 && weekIndex > 1) weekIndex -= 1;
+        if (weekIndex > 5) weekIndex = 5;
+        return weekIndex;
+    };
+
     let nestedData = {}; 
 
     data.forEach(item => {
@@ -652,19 +691,22 @@ function renderWeeksDashboard(data) {
         const d = new Date(item.DATE);
         if (isNaN(d)) return; 
 
-        const year = d.getFullYear(); 
-        const monthIndex = d.getMonth(); 
-        const monthName = d.toLocaleString('en-US', { month: 'long' }); 
+        const dayOfWeek = d.getUTCDay() || 7; 
+        const weekStart = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - dayOfWeek + 1));
+        const weekEnd = new Date(Date.UTC(weekStart.getUTCFullYear(), weekStart.getUTCMonth(), weekStart.getUTCDate() + 6));
 
-        const dateNum = d.getDate();
-        const firstOfMonth = new Date(year, monthIndex, 1);
-        let firstWeekday = firstOfMonth.getDay();
-        if (firstWeekday === 0) firstWeekday = 7;
-        
-        let weekIndex = Math.ceil((dateNum + firstWeekday - 1) / 7);
-        if (firstWeekday >= 6 && weekIndex > 1) weekIndex -= 1;
-        if (weekIndex > 5) weekIndex = 5;
+        let anchorDate = weekStart;
+        if (selMonth !== "ALL") {
+            const endMonthName = weekEnd.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+            if (endMonthName === selMonth) {
+                anchorDate = weekEnd;
+            }
+        }
 
+        const year = anchorDate.getUTCFullYear(); 
+        const monthIndex = anchorDate.getUTCMonth(); 
+        const monthName = anchorDate.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' }); 
+        const weekIndex = getWeekIndex(anchorDate);
         const monthKey = `${year}-${String(monthIndex).padStart(2, '0')}`;
         
         if (!nestedData[monthKey]) {
@@ -693,33 +735,51 @@ function renderWeeksDashboard(data) {
         const monthObj = nestedData[mKey];
         let weekKeys = Object.keys(monthObj.weeks);
         
-        if (selMonth === "ALL") {
-            weekKeys.sort((a, b) => Number(a) - Number(b));
-        } else {
-            weekKeys.sort((a, b) => weekSortDirection === 'asc' ? Number(a) - Number(b) : Number(b) - Number(a));
-        }
+        // --- THE FIX: Let the toggle control the week order unconditionally ---
+        weekKeys.sort((a, b) => weekSortDirection === 'asc' ? Number(a) - Number(b) : Number(b) - Number(a));
 
         weekKeys.forEach((wIndex, wArrayIdx) => {
             const weekTrucks = monthObj.weeks[wIndex];
             const sortedTrucks = Object.keys(weekTrucks).sort((a, b) => Number(a) - Number(b));
 
-            const firstOfMonth = new Date(monthObj.year, monthObj.index, 1);
-            let firstWeekday = firstOfMonth.getDay(); 
-            if (firstWeekday === 0) firstWeekday = 7;
-            const lastDayOfMonth = new Date(monthObj.year, monthObj.index + 1, 0).getDate();
+            const anyTruck = sortedTrucks[0];
+            const sampleLoad = weekTrucks[anyTruck].items[0];
+            const dObj = new Date(sampleLoad.DATE);
+            const dDayOfWeek = dObj.getUTCDay() || 7;
+            const wStart = new Date(Date.UTC(dObj.getUTCFullYear(), dObj.getUTCMonth(), dObj.getUTCDate() - dDayOfWeek + 1));
+            const wEnd = new Date(Date.UTC(wStart.getUTCFullYear(), wStart.getUTCMonth(), wStart.getUTCDate() + 6));
 
-            let minDay = 32, maxDay = 0;
-            for (let i = 1; i <= lastDayOfMonth; i++) {
-                let currW = Math.ceil((i + firstWeekday - 1) / 7);
-                if (firstWeekday >= 6 && currW > 1) currW -= 1;
-                if (currW > 5) currW = 5;
-                
-                if (Number(currW) === Number(wIndex)) {
-                    if (i < minDay) minDay = i;
-                    if (i > maxDay) maxDay = i;
+            const startMonthShort = wStart.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' }).toUpperCase();
+            const startDay = String(wStart.getUTCDate()).padStart(2, '0');
+            const endMonthShort = wEnd.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' }).toUpperCase();
+            const endDay = String(wEnd.getUTCDate()).padStart(2, '0');
+
+            let dateRangeStr = `${startMonthShort} ${startDay} - ${endDay}`;
+            if (startMonthShort !== endMonthShort) {
+                dateRangeStr = `${startMonthShort} ${startDay} - ${endMonthShort} ${endDay}`;
+            }
+
+            const startMonthFull = wStart.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' }).toUpperCase();
+            const startYearFull = wStart.getUTCFullYear();
+            const startWeekIdx = getWeekIndex(wStart);
+            
+            const endMonthFull = wEnd.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' }).toUpperCase();
+            const endYearFull = wEnd.getUTCFullYear();
+            const endWeekIdx = getWeekIndex(wEnd);
+
+            // --- THE FIX: Cleaner Header Titles without "SUMMARY" ---
+            let headerTitle = `${startMonthFull} ${startYearFull} - WEEK ${startWeekIdx}`;
+            
+            // If the week crosses into a new month, use the "&" symbol and swap based on sort!
+            if (startMonthFull !== endMonthFull) {
+                if (weekSortDirection === 'desc') {
+                    // Newest first: April comes before March
+                    headerTitle = `${endMonthFull} ${endYearFull} - WEEK ${endWeekIdx}  &  ${startMonthFull} ${startYearFull} - WEEK ${startWeekIdx}`;
+                } else {
+                    // Oldest first: March comes before April
+                    headerTitle = `${startMonthFull} ${startYearFull} - WEEK ${startWeekIdx}  &  ${endMonthFull} ${endYearFull} - WEEK ${endWeekIdx}`;
                 }
             }
-            const dateRangeStr = `${monthObj.name.substring(0, 3)} ${String(minDay).padStart(2, '0')} - ${String(maxDay).padStart(2, '0')}`;
 
             if (html !== '' && !(mKey === sortedMonthKeys[0] && wArrayIdx === 0)) {
                 html += `<tr class="bg-gray-100 !border-0 !border-transparent"><td colspan="8" class="h-6 !border-0 !border-transparent bg-gray-100"></td></tr>`;
@@ -727,10 +787,8 @@ function renderWeeksDashboard(data) {
 
             const weekId = `w-${mKey}-${wIndex}`;
             
-            // --- THE MEMORY CHECK ---
             const isExpanded = expandedWeeks.has(weekId);
             const rowHiddenClass = isExpanded ? "" : "hidden";
-            // Set initial colors and positions based on memory (SWAPPED)
             const bgClass = isExpanded ? "bg-slate-800" : "bg-blue-600";
             const circlePosition = isExpanded ? "translate-x-5" : "";
 
@@ -738,7 +796,7 @@ function renderWeeksDashboard(data) {
                 <tr class="bg-blue-50 border-t-4 border-black">
                     <td colspan="8" class="px-4 py-3">
                         <div class="flex justify-between items-center">
-                            <span class="font-black text-blue-800 uppercase tracking-widest text-[12.24px]">📅 ${monthObj.name} ${monthObj.year} - WEEK ${wIndex} SUMMARY</span>
+                            <span class="font-black text-blue-800 uppercase tracking-widest text-[12.24px]">📅 ${headerTitle}</span>
                             
                             <button onclick="toggleWeekDetails('${weekId}')" class="focus:outline-none cursor-pointer" title="Expand/Collapse Loads">
                                 <div id="toggle-bg-${weekId}" class="w-10 h-5 rounded-full relative transition-colors duration-300 ease-in-out ${bgClass}">
@@ -787,7 +845,12 @@ function renderWeeksDashboard(data) {
                     </tr>
                 `;
 
-                t.items.sort((a, b) => new Date(a.DATE) - new Date(b.DATE));
+                // --- THE FIX: Let the toggle control the Days (Loads) order too ---
+                t.items.sort((a, b) => {
+                    return weekSortDirection === 'asc' 
+                        ? new Date(a.DATE) - new Date(b.DATE) 
+                        : new Date(b.DATE) - new Date(a.DATE);
+                });
 
                 t.items.forEach((load, lIdx) => {
                     const dObj = new Date(load.DATE);
@@ -801,16 +864,15 @@ function renderWeeksDashboard(data) {
                     const lRpm = lLoaded > 0 ? (lGross / lLoaded).toFixed(2) : "-";
                     const lRptm = lTotal > 0 ? (lGross / lTotal).toFixed(2) : "-";
                     
-                    // --- THE FIX: Smart Blank Space Logic ---
                     const origin = load.STATEORIGIN ? load.STATEORIGIN.trim() : "";
                     const dest = load.STATEDESTINATION ? load.STATEDESTINATION.trim() : "";
                     
                     let routeStr = "";
                     if (origin && dest) {
-                        routeStr = `${origin} ➔ ${dest}`; // Both exist
+                        routeStr = `${origin} ➔ ${dest}`; 
                     } else if (origin || dest) {
-                        routeStr = origin || dest; // Only one exists
-                    } // If both are empty, routeStr stays completely blank ("")
+                        routeStr = origin || dest; 
+                    }
                     
                     const childBorder = (isLast && lIdx === t.items.length - 1) ? "border-b-4 border-gray-200" : "border-b border-gray-100";
 
