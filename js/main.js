@@ -397,10 +397,11 @@ function renderDashboard(data) {
                     const wRptm = wData.totalMiles > 0 ? (wData.gross / wData.totalMiles).toFixed(2) : "-";
                     const wRpm = wData.loadedMiles > 0 ? (wData.gross / wData.loadedMiles).toFixed(2) : "-";
                     
+                    // --- FIX 1: Rounded weekly gross ---
                     weeklyHtml += `
                         <div class="grid grid-cols-[45px_55px_60px_50px] items-center text-[11.5px] py-1 border-t border-gray-100 whitespace-nowrap overflow-hidden">
                             <span class="font-bold text-gray-400 uppercase text-[9px]">Week ${i}</span>
-                            <span class="text-blue-900 font-bold">$${wData.gross.toLocaleString()}</span>
+                            <span class="text-blue-900 font-bold">$${Math.round(wData.gross).toLocaleString()}</span>
                             <div class="flex gap-1 items-center">
                                 <span class="text-gray-400 text-[10px] uppercase font-bold">RPM:</span>
                                 <span class="font-black text-slate-950">${wRpm}</span>
@@ -415,7 +416,6 @@ function renderDashboard(data) {
                     if (i === lastWeekIndex && splitStart) {
                         let exGross = 0, exLoaded = 0, exTotal = 0;
                         
-                        // Look ahead into the raw dataset for the cross-month days
                         currentData.forEach(item => {
                             if (item.TRUCK.toString() === truck.id.toString()) {
                                 const d = new Date(item.DATE);
@@ -427,7 +427,6 @@ function renderDashboard(data) {
                             }
                         });
 
-                        // Only show the row if they actually drove in those next-month days
                         if (exTotal > 0 || exGross > 0) {
                             const cbGross = wData.gross + exGross;
                             const cbLoaded = wData.loadedMiles + exLoaded;
@@ -435,10 +434,11 @@ function renderDashboard(data) {
                             const cRpm = cbLoaded > 0 ? (cbGross / cbLoaded).toFixed(2) : "-";
                             const cRptm = cbTotal > 0 ? (cbGross / cbTotal).toFixed(2) : "-";
 
+                            // --- FIX 2: Rounded cross-month gross ---
                             weeklyHtml += `
                                 <div class="grid grid-cols-[45px_55px_60px_50px] items-center text-[9px] py-0.5 bg-gray-50/80 whitespace-nowrap overflow-hidden">
                                     <span class="italic text-gray-400 font-medium pl-1 text-[8.5px]">↳ Full </span>
-                                    <span class="text-blue-700/80 font-bold">$${cbGross.toLocaleString()}</span>
+                                    <span class="text-blue-700/80 font-bold">$${Math.round(cbGross).toLocaleString()}</span>
                                     <div class="flex gap-1 items-center text-gray-500/80">
                                         <span class="text-[8px] uppercase">RPM:</span>
                                         <span class="font-bold text-[9px]">${cRpm}</span>
@@ -450,17 +450,17 @@ function renderDashboard(data) {
                                 </div>`;
                         }
                     }
-                    // ----------------------------------------------
                 }
             }
 
             const totalRpm = truck.totalLoaded > 0 ? (truck.totalGross / truck.totalLoaded).toFixed(2) : "-";
             const totalRptm = truck.totalMiles > 0 ? (truck.totalGross / truck.totalMiles).toFixed(2) : "-";
 
+            // --- FIX 3: Rounded total gross ---
             const totalsRowHtml = `
                 <div class="grid grid-cols-[45px_55px_60px_50px] items-center text-[11.5px] py-1 border-t-2 border-blue-100 bg-blue-50/50 whitespace-nowrap overflow-hidden">
                     <span class="font-black text-blue-600 uppercase text-[9px]">TOTAL</span>
-                    <span class="text-blue-900 font-black">$${truck.totalGross.toLocaleString()}</span>
+                    <span class="text-blue-900 font-black">$${Math.round(truck.totalGross).toLocaleString()}</span>
                     <div class="flex gap-1 items-center">
                         <span class="text-blue-400 text-[10px] uppercase font-bold">RPM:</span>
                         <span class="font-black text-blue-900">${totalRpm}</span>
