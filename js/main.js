@@ -16,7 +16,7 @@ window.toggleWeekDetails = toggleWeekDetails;
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyrS4Sg3GvLIsmZsuIK0KD-zWOhRy5c5wccIKVisn-Wg04GBYU11p6hKUYNaZsYW3_1/exec'; 
 const VIEW_KEY = 'VD'; 
 const MASTER_KEY = '1631216'; 
-const ALLOWED_TRUCKS = ['108', '1589', '1592', '1593', '1594', '156'];
+const ALLOWED_TRUCKS = ['108', '1589', '1590', '1592', '1593', '1594', '156'];
 
 // 3. APP STATE
 let userRole = 'driver'; 
